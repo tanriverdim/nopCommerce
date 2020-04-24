@@ -137,15 +137,11 @@ namespace Nop.Plugin.Shipping.UPS.Services
         /// <returns>XML string</returns>
         private string ToXml<T>(T value)
         {
-            using (var writer = new StringWriter())
-            {
-                using (var xmlWriter = new XmlTextWriter(writer) { Formatting = Formatting.Indented })
-                {
-                    var xmlSerializer = new XmlSerializer(typeof(T));
-                    xmlSerializer.Serialize(xmlWriter, value);
-                    return writer.ToString();
-                }
-            }
+            using var writer = new StringWriter();
+            using var xmlWriter = new XmlTextWriter(writer) { Formatting = Formatting.Indented };
+            var xmlSerializer = new XmlSerializer(typeof(T));
+            xmlSerializer.Serialize(xmlWriter, value);
+            return writer.ToString();
         }
 
         /// <summary>
@@ -161,35 +157,34 @@ namespace Nop.Plugin.Shipping.UPS.Services
                 var trackPort = _upsSettings.UseSandbox
                     ? UPSTrack.TrackPortTypeClient.EndpointConfiguration.TrackPort
                     : UPSTrack.TrackPortTypeClient.EndpointConfiguration.ProductionTrackPort;
-                using (var client = new UPSTrack.TrackPortTypeClient(trackPort))
+                
+                using var client = new UPSTrack.TrackPortTypeClient(trackPort);
+                //create object to authenticate request
+                var security = new UPSTrack.UPSSecurity
                 {
-                    //create object to authenticate request
-                    var security = new UPSTrack.UPSSecurity
+                    ServiceAccessToken = new UPSTrack.UPSSecurityServiceAccessToken
                     {
-                        ServiceAccessToken = new UPSTrack.UPSSecurityServiceAccessToken
-                        {
-                            AccessLicenseNumber = _upsSettings.AccessKey
-                        },
-                        UsernameToken = new UPSTrack.UPSSecurityUsernameToken
-                        {
-                            Username = _upsSettings.Username,
-                            Password = _upsSettings.Password
-                        }
-                    };
+                        AccessLicenseNumber = _upsSettings.AccessKey
+                    },
+                    UsernameToken = new UPSTrack.UPSSecurityUsernameToken
+                    {
+                        Username = _upsSettings.Username,
+                        Password = _upsSettings.Password
+                    }
+                };
 
-                    //save debug info
-                    if (_upsSettings.Tracing)
-                        _logger.Information($"UPS shipment tracking. Request: {ToXml(new UPSTrack.TrackRequest1(security, request))}");
+                //save debug info
+                if (_upsSettings.Tracing)
+                    _logger.Information($"UPS shipment tracking. Request: {ToXml(new UPSTrack.TrackRequest1(security, request))}");
 
-                    //try to get response details
-                    var response = await client.ProcessTrackAsync(security, request);
+                //try to get response details
+                var response = await client.ProcessTrackAsync(security, request);
 
-                    //save debug info
-                    if (_upsSettings.Tracing)
-                        _logger.Information($"UPS shipment tracking. Response: {ToXml(response)}");
+                //save debug info
+                if (_upsSettings.Tracing)
+                    _logger.Information($"UPS shipment tracking. Response: {ToXml(response)}");
 
-                    return response.TrackResponse;
-                }
+                return response.TrackResponse;
             }
             catch (FaultException<UPSTrack.ErrorDetailType[]> ex)
             {
@@ -264,24 +259,13 @@ namespace Nop.Plugin.Shipping.UPS.Services
                 switch (activity.Status.Type)
                 {
                     case "I":
-                        switch (activity.Status.Code)
+                        eventName = activity.Status.Code switch
                         {
-                            case "DP":
-                                eventName = "Plugins.Shipping.Tracker.Departed";
-                                break;
-
-                            case "EP":
-                                eventName = "Plugins.Shipping.Tracker.ExportScanned";
-                                break;
-
-                            case "OR":
-                                eventName = "Plugins.Shipping.Tracker.OriginScanned";
-                                break;
-
-                            default:
-                                eventName = "Plugins.Shipping.Tracker.Arrived";
-                                break;
-                        }
+                            "DP" => "Plugins.Shipping.Tracker.Departed",
+                            "EP" => "Plugins.Shipping.Tracker.ExportScanned",
+                            "OR" => "Plugins.Shipping.Tracker.OriginScanned",
+                            _ => "Plugins.Shipping.Tracker.Arrived",
+                        };
                         break;
 
                     case "X":
@@ -320,35 +304,34 @@ namespace Nop.Plugin.Shipping.UPS.Services
                 var ratePort = _upsSettings.UseSandbox
                     ? UPSRate.RatePortTypeClient.EndpointConfiguration.RatePort
                     : UPSRate.RatePortTypeClient.EndpointConfiguration.ProductionRatePort;
-                using (var client = new UPSRate.RatePortTypeClient(ratePort))
+                
+                using var client = new UPSRate.RatePortTypeClient(ratePort);
+                //create object to authenticate request
+                var security = new UPSRate.UPSSecurity
                 {
-                    //create object to authenticate request
-                    var security = new UPSRate.UPSSecurity
+                    ServiceAccessToken = new UPSRate.UPSSecurityServiceAccessToken
                     {
-                        ServiceAccessToken = new UPSRate.UPSSecurityServiceAccessToken
-                        {
-                            AccessLicenseNumber = _upsSettings.AccessKey
-                        },
-                        UsernameToken = new UPSRate.UPSSecurityUsernameToken
-                        {
-                            Username = _upsSettings.Username,
-                            Password = _upsSettings.Password
-                        }
-                    };
+                        AccessLicenseNumber = _upsSettings.AccessKey
+                    },
+                    UsernameToken = new UPSRate.UPSSecurityUsernameToken
+                    {
+                        Username = _upsSettings.Username,
+                        Password = _upsSettings.Password
+                    }
+                };
 
-                    //save debug info
-                    if (_upsSettings.Tracing)
-                        _logger.Information($"UPS rates. Request: {ToXml(new UPSRate.RateRequest1(security, request))}");
+                //save debug info
+                if (_upsSettings.Tracing)
+                    _logger.Information($"UPS rates. Request: {ToXml(new UPSRate.RateRequest1(security, request))}");
 
-                    //try to get response details
-                    var response = await client.ProcessRateAsync(security, request);
+                //try to get response details
+                var response = await client.ProcessRateAsync(security, request);
 
-                    //save debug info
-                    if (_upsSettings.Tracing)
-                        _logger.Information($"UPS rates. Response: {ToXml(response)}");
+                //save debug info
+                if (_upsSettings.Tracing)
+                    _logger.Information($"UPS rates. Response: {ToXml(response)}");
 
-                    return response.RateResponse;
-                }
+                return response.RateResponse;
             }
             catch (FaultException<UPSRate.ErrorDetailType[]> ex)
             {
@@ -449,7 +432,7 @@ namespace Nop.Plugin.Shipping.UPS.Services
                 };
             }
 
-            //set saturday delivery details
+            //set Saturday delivery details
             if (saturdayDelivery)
             {
                 request.Shipment.ShipmentServiceOptions = new UPSRate.ShipmentServiceOptionsType
@@ -459,22 +442,12 @@ namespace Nop.Plugin.Shipping.UPS.Services
             }
 
             //set packages details
-            switch (_upsSettings.PackingType)
+            request.Shipment.Package = _upsSettings.PackingType switch
             {
-                case PackingType.PackByOneItemPerPackage:
-                    request.Shipment.Package = GetPackagesForOneItemPerPackage(shippingOptionRequest).ToArray();
-                    break;
-
-                case PackingType.PackByVolume:
-                    request.Shipment.Package = GetPackagesByCubicRoot(shippingOptionRequest).ToArray();
-                    break;
-
-                case PackingType.PackByDimensions:
-                default:
-                    request.Shipment.Package = GetPackagesByDimensions(shippingOptionRequest).ToArray();
-                    break;
-            }
-
+                PackingType.PackByOneItemPerPackage => GetPackagesForOneItemPerPackage(shippingOptionRequest).ToArray(),
+                PackingType.PackByVolume => GetPackagesByCubicRoot(shippingOptionRequest).ToArray(),
+                _ => GetPackagesByDimensions(shippingOptionRequest).ToArray(),
+            };
             return request;
         }
 
@@ -873,11 +846,20 @@ namespace Nop.Plugin.Shipping.UPS.Services
                 if (!monetaryValue.HasValue)
                     continue;
 
+                //parse transit days
+                int? transitDays = null;
+                if (!string.IsNullOrWhiteSpace(rate.GuaranteedDelivery?.BusinessDaysInTransit))
+                {
+                    if (int.TryParse(rate.GuaranteedDelivery.BusinessDaysInTransit, out var businessDaysInTransit))
+                        transitDays = businessDaysInTransit;
+                }
+
                 //add shipping option based on service rate
                 shippingOptions.Add(new ShippingOption
                 {
                     Rate = monetaryValue.Value,
-                    Name = deliveryService.Name
+                    Name = deliveryService.Name,
+                    TransitDays = transitDays
                 });
             }
 
@@ -942,7 +924,7 @@ namespace Nop.Plugin.Shipping.UPS.Services
             if (!string.IsNullOrEmpty(error))
                 response.Errors.Add(error);
 
-            //get rates for saturday delivery
+            //get rates for Saturday delivery
             if (_upsSettings.SaturdayDeliveryEnabled)
             {
                 var (saturdayShippingOptions, saturdayError) = GetShippingOptions(shippingOptionRequest, true);
@@ -950,8 +932,8 @@ namespace Nop.Plugin.Shipping.UPS.Services
                 {
                     response.ShippingOptions.Add(shippingOption);
                 }
-                if (!string.IsNullOrEmpty(error))
-                    response.Errors.Add(error);
+                if (!string.IsNullOrEmpty(saturdayError))
+                    response.Errors.Add(saturdayError);
             }
 
             if (response.ShippingOptions.Any())
